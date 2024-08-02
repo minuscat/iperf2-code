@@ -1656,9 +1656,10 @@ int Client::ack_poll (time_tp ack_timeout) {
 	bool read_ready = false;
 	bool read_done = false;
 	struct timeval t_initial, t_final;
+	struct timeval t_now;
 	TimeGetNow(t_initial);
 	t_final = t_initial;
-	TimeAddIntUsec(t_final, reinterpret_cast<int>(ack_timeout));
+	TimeAddIntUsec(t_final, static_cast<int>(ack_timeout));
 	if (ack_timeout > 1000) { // one millisecond
 	    struct timeval timeout;
 	    fd_set set;
@@ -1671,7 +1672,6 @@ int Client::ack_poll (time_tp ack_timeout) {
 	    }
 	}
 	while (!read_ready && !read_done) {
-	    struct timeval t_now;
 	    TimeGetNow(t_now);
 	    double delta_usecs;
 	    if ((delta_usecs = TimeDifference(t_final, t_now)) > 0.0) {
@@ -1686,6 +1686,10 @@ int Client::ack_poll (time_tp ack_timeout) {
 	if (read_ready && !read_done) {
 	    rc = recv(mySocket, reinterpret_cast<char *>(&UDPAckBuf), sizeof(struct udp_l4s_ack), 0);
 	}
+#if 0
+	TimeGetNow(t_now);
+	printf("Ack slop %f n:%ld.%ld f:%ld.%ld i:%ld.%ld to:%d (%d)\n", TimeDifference(t_now, t_final), t_now.tv_sec, t_now.tv_usec, t_final.tv_sec, t_final.tv_usec, t_initial.tv_sec, t_initial.tv_usec, ack_timeout, read_ready);
+#endif
     }
     return rc;
 }
