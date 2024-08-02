@@ -2426,7 +2426,7 @@ static void reporter_output_client_settings (struct ReportSettings *report) {
     } else {
 	printf(client_pid_port_dev, hoststr,
 	       (isUDP(report->common) ? (isUDPL4S (report->common) ? (isUDPL4SVideo(report->common) ? "UDP L4S Video" : "UDP L4S") : "UDP") : "TCP"),
-	       report->pid,
+	       report->common->Port, report->pid,
 	       report->common->Ifrnametx, (!report->common->threads ? 1 : report->common->threads),
 	       (!report->common->threads ? 1 : report->common->working_load_threads));
     }
