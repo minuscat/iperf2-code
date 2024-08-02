@@ -1799,7 +1799,6 @@ void Client::RunUDPL4S () {
                 l4s_pacer.ResetCCInfo();
         l4s_pacer.GetCCInfo(pacing_rate, packet_window, packet_burst, packet_size);
     }
-    printf("*** why ending peer close %d\n", peerclose);
     FinishTrafficActions();
 }
 
