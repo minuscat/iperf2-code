@@ -132,7 +132,7 @@ private:
     void RunUDP(void);
     void RunUDPBurst(void);
     void RunUDPL4S(void);
-    int poll_ack (time_tp ack_timeout);
+    int ack_poll (time_tp ack_timeout);
     // client connect
     void PeerXchange(void);
     thread_Settings *mSettings;

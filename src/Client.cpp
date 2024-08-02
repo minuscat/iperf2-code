@@ -1650,8 +1650,43 @@ void Client::RunUDPBurst () {
     FinishTrafficActions();
 }
 
-int Client::poll_ack (time_tp ack_timeout) {
+int Client::ack_poll (time_tp ack_timeout) {
     int rc = -1;
+    if (ack_timeout > 0) {
+	bool read_ready = false;
+	bool read_done = false;
+	struct timeval t_initial, t_final;
+	TimeGetNow(t_initial);
+	t_final = t_initial;
+	TimeAddIntUsec(t_final, reinterpret_cast<int>(ack_timeout));
+	if (ack_timeout > 1000) { // one millisecond
+	    struct timeval timeout;
+	    fd_set set;
+	    timeout.tv_sec = static_cast<long>(ack_timeout / 1000000);
+	    timeout.tv_usec = static_cast<long>(ack_timeout % 1000000);
+            FD_ZERO(&set);
+            FD_SET(mySocket, &set);
+	    if (select(mySocket + 1, &set, NULL, NULL, &timeout) > 0) {
+		read_ready = true;
+	    }
+	}
+	while (!read_ready && !read_done) {
+	    struct timeval t_now;
+	    TimeGetNow(t_now);
+	    double delta_usecs;
+	    if ((delta_usecs = TimeDifference(t_final, t_now)) > 0.0) {
+		rc = recv(mySocket, reinterpret_cast<char *>(&UDPAckBuf), sizeof(struct udp_l4s_ack), MSG_DONTWAIT);
+		if (rc > 0) {
+		    read_done = true;
+		}
+	    } else {
+		break;
+	    }
+	}
+	if (read_ready && !read_done) {
+	    rc = recv(mySocket, reinterpret_cast<char *>(&UDPAckBuf), sizeof(struct udp_l4s_ack), 0);
+	}
+    }
     return rc;
 }
 
@@ -1744,13 +1779,8 @@ void Client::RunUDPL4S () {
             waitTimeout = pacer_now + 1000000; // units usec
 
 	time_tp ack_timeout = waitTimeout - pacer_now; // units usec;
-	currLen = poll_ack(ack_timeout);
-	//	    printf("**** read done %d %d\n", currLen, to);
-	// RJM Need error handling here in case of zero
-	//	    FAIL_errno((currLen == 0), "Peer close on udp recv\n", mSettings);
+	currLen = ack_poll(ack_timeout);
 	pacer_now = l4s_pacer.Now();
-
-
         if (currLen >= (int) sizeof(struct udp_l4s_ack)) {
 	    ecn_tp rcv_ecn = ecn_tp(reportstruct->tos & 0x3);
 	    time_tp timestamp;
