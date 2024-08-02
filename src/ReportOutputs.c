@@ -2419,13 +2419,13 @@ static void reporter_output_client_settings (struct ReportSettings *report) {
 		      : report->common->Host);
     if (!report->common->Ifrnametx) {
 	printf(isEnhanced(report->common) ? client_pid_port : client_port, hoststr,
-	       (isUDP(report->common) ? (isUDPL4S (report->common) ? (isUDPL4SVideo(report->common) ? "UDP L4S Video" : "UDP L4S") : "UDP") : "TCP"),
+	       (isUDP(report->common) ? (isUDPL4S(report->common) ? (isUDPL4SVideo(report->common) ? "UDP L4S Video" : "UDP L4S") : "UDP") : "TCP"),
 	       report->common->Port, report->pid,
 	       (!report->common->threads ? 1 : report->common->threads),
 	       (!report->common->threads ? 1 : report->common->working_load_threads));
     } else {
 	printf(client_pid_port_dev, hoststr,
-	       (isUDP(report->common) ? (isUDPL4S (report->common) ? (isUDPL4SVideo(report->common) ? "UDP L4S Video" : "UDP L4S") : "UDP") : "TCP"),
+	       (isUDP(report->common) ? (isUDPL4S(report->common) ? (isUDPL4SVideo(report->common) ? "UDP L4S Video" : "UDP L4S") : "UDP") : "TCP"),
 	       report->common->Port, report->pid,
 	       report->common->Ifrnametx, (!report->common->threads ? 1 : report->common->threads),
 	       (!report->common->threads ? 1 : report->common->working_load_threads));
@@ -2706,6 +2706,12 @@ void reporter_print_connection_report (struct ConnectionInfo *report) {
 	n = snprintf(b, SNBUFFERSIZE-strlen(b), " (trip-times)");
 	FAIL_exit((n < 0), "fail append tt");
 	FAIL_exit((strlen(linebuffer) >= SNBUFFERSIZE), "buffer overflow tt");
+	b += n;
+    }
+    if (isUDPL4S(report->common)) {
+	n = snprintf(b, SNBUFFERSIZE-strlen(b), " (l4s)");
+	FAIL_exit((n < 0), "fail append l4s");
+	FAIL_exit((strlen(linebuffer) >= SNBUFFERSIZE), "buffer overflow l4s");
 	b += n;
     }
     if (isEnhanced(report->common)) {
