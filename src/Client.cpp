@@ -67,7 +67,6 @@
 #include "payloads.h"
 #include "active_hosts.h"
 #include "gettcpinfo.h"
-#include "prague_cc.h"
 
 // const double kSecs_to_usecs = 1e6;
 const double kSecs_to_nsecs = 1e9;
@@ -1651,6 +1650,11 @@ void Client::RunUDPBurst () {
     FinishTrafficActions();
 }
 
+int Client::poll_ack (time_tp ack_timeout) {
+    int rc = -1;
+    return rc;
+}
+
 void Client::RunUDPL4S () {
     int currLen;
     peerclose = false;
@@ -1665,7 +1669,6 @@ void Client::RunUDPL4S () {
     size_tp packet_size;
     ecn_tp prev_ecn = ecn_not_ect;
     l4s_pacer.GetCCInfo(pacing_rate, packet_window, packet_burst, packet_size);
-    InitKernelTimeStamping();
     while (InProgress()) {
 	count_tp inburst = 0;
         // [TODO] Add timout functionality
@@ -1740,21 +1743,13 @@ void Client::RunUDPL4S () {
         else
             waitTimeout = pacer_now + 1000000; // units usec
 
-        do {
-            timeout = waitTimeout - pacer_now; // units usec
-	    int to = timeout;
-	    if (timeout > 0) {
-		SetSocketOptionsReceiveTimeout(mSettings, to);
-	    } else {
-		// effectively set socket to non blocking
-		SetSocketOptionsReceiveTimeout(mSettings, to);
-	    }
-            currLen=ReadWithRxTimestamp();
-	    //	    printf("**** read done %d %d\n", currLen, to);
-	    // RJM Need error handling here in case of zero
-	    //	    FAIL_errno((currLen == 0), "Peer close on udp recv\n", mSettings);
-	    pacer_now = l4s_pacer.Now();
-        } while ((waitTimeout > pacer_now) && (currLen < 0));
+	time_tp ack_timeout = waitTimeout - pacer_now; // units usec;
+	currLen = poll_ack(ack_timeout);
+	//	    printf("**** read done %d %d\n", currLen, to);
+	// RJM Need error handling here in case of zero
+	//	    FAIL_errno((currLen == 0), "Peer close on udp recv\n", mSettings);
+	pacer_now = l4s_pacer.Now();
+
 
         if (currLen >= (int) sizeof(struct udp_l4s_ack)) {
 	    ecn_tp rcv_ecn = ecn_tp(reportstruct->tos & 0x3);
@@ -2210,88 +2205,6 @@ void Client::PeerXchange () {
     } else {
         WARN_errno(1, "recvack");
     }
-}
-inline int Client::ReadWithRxTimestamp () {
-    int currLen;
-    int tsdone = false;
-
-    reportstruct->err_readwrite = ReadSuccess;
-#if (HAVE_DECL_SO_TIMESTAMP) && (HAVE_DECL_MSG_CTRUNC) && 0
-    cmsg = reinterpret_cast<struct cmsghdr *>(&ctrl);
-    currLen = recvmsg(mSettings->mSock, &message, mSettings->recvflags);
-    if (currLen > 0) {
-#if HAVE_DECL_MSG_TRUNC
-        if (message.msg_flags & MSG_TRUNC) {
-            reportstruct->err_readwrite = ReadErrLen;
-        }
-#endif
-        if (!(message.msg_flags & MSG_CTRUNC)) {
-            for (cmsg = CMSG_FIRSTHDR(&message); cmsg != NULL;
-                 cmsg = CMSG_NXTHDR(&message, cmsg)) {
-                if (cmsg->cmsg_level == SOL_SOCKET &&
-                    cmsg->cmsg_type  == SCM_TIMESTAMP &&
-                    cmsg->cmsg_len   == CMSG_LEN(sizeof(struct timeval))) {
-                    memcpy(&(reportstruct->packetTime), CMSG_DATA(cmsg), sizeof(struct timeval));
-                    if (TimeZero(myReport->info.ts.prevpacketTime)) {
-                        myReport->info.ts.prevpacketTime = reportstruct->packetTime;
-                    }
-                    tsdone = true;
-                }
-		if (cmsg->cmsg_level == IPPROTO_IP &&
-                    cmsg->cmsg_type  == IP_RECVTOS &&
-                    cmsg->cmsg_len   == CMSG_LEN(sizeof(sizeof(u_char)))) {
-                    memcpy(&(reportstruct->tos), CMSG_DATA(cmsg), sizeof(u_char));
-		}
-            }
-        } else if (ctrunc_warn_enable && mSettings->mTransferIDStr) {
-            fprintf(stderr, "%sWARN: recvmsg MSG_CTRUNC occured\n", mSettings->mTransferIDStr);
-            ctrunc_warn_enable = false;
-        }
-    }
-#else
-    currLen = recv(mSettings->mSock, (char *)&UDPAckBuf, sizeof(UDPAckBuf), 0);
-#endif
-    if (currLen < 0 ) {
-        if (FATALUDPREADERR(errno)) {
-            char warnbuf[WARNBUFSIZE];
-            snprintf(warnbuf, sizeof(warnbuf), "%srecvmsg",\
-                     mSettings->mTransferIDStr);
-            warnbuf[sizeof(warnbuf)-1] = '\0';
-            WARN_errno(1, warnbuf);
-            currLen = 0;
-            peerclose = true;
-        } else {
-            reportstruct->err_readwrite = ReadTimeo;
-        }
-    } else if (TimeZero(myReport->info.ts.prevpacketTime)) {
-        myReport->info.ts.prevpacketTime = reportstruct->packetTime;
-    }
-    if (!tsdone) {
-        now.setnow();
-        reportstruct->packetTime.tv_sec = now.getSecs();
-        reportstruct->packetTime.tv_usec = now.getUsecs();
-    }
-    return currLen;
-}
-
-void Client::InitKernelTimeStamping () {
-#if HAVE_DECL_SO_TIMESTAMP
-    iov[0].iov_base=(char *)&UDPAckBuf;
-    iov[0].iov_len=sizeof(UDPAckBuf);
-
-    message.msg_iov=iov;
-    message.msg_iovlen=1;
-    message.msg_name=&srcaddr;
-    message.msg_namelen=sizeof(srcaddr);
-
-    message.msg_control = (char *) ctrl;
-    message.msg_controllen = sizeof(ctrl);
-
-    int timestampOn = 1;
-    if (setsockopt(mSettings->mSock, SOL_SOCKET, SO_TIMESTAMP, &timestampOn, sizeof(timestampOn)) < 0) {
-        WARN_errno(mSettings->mSock == SO_TIMESTAMP, "socket");
-    }
-#endif
 }
 
 /*

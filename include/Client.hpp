@@ -59,6 +59,7 @@
 #include "isochronous.hpp"
 #include "iperf_multicast_api.h"
 #include "Mutex.h"
+#include "prague_cc.h"
 
 /* ------------------------------------------------------------------- */
 class Client {
@@ -98,7 +99,6 @@ private:
 #endif
     inline double get_delay_target(void);
     void InitTrafficLoop(void);
-    void InitKernelTimeStamping(void);
     void SetReportStartTime(void);
     inline void SetFullDuplexReportStartTime(void);
     void FinishTrafficActions(void);
@@ -106,7 +106,6 @@ private:
     bool InProgress(void);
     void PostNullEvent(bool isFirst, bool select_retry);
     void AwaitServerCloseEvent(void);
-    int ReadWithRxTimestamp(void);
     inline void tcp_shutdown(void);
     bool connected;
     ReportStruct scratchpad;
@@ -133,6 +132,7 @@ private:
     void RunUDP(void);
     void RunUDPBurst(void);
     void RunUDPL4S(void);
+    int poll_ack (time_tp ack_timeout);
     // client connect
     void PeerXchange(void);
     thread_Settings *mSettings;
@@ -152,19 +152,6 @@ private:
     bool mysock_init_done;
     bool peerclose;
     Timestamp write_start;
-#if HAVE_DECL_SO_TIMESTAMP
-    // Structures needed for recvmsg
-    // Use to get kernel timestamps of packets
-    struct sockaddr_storage srcaddr;
-    struct iovec iov[1];
-    struct msghdr message;
-    char ctrl[(CMSG_SPACE(sizeof(struct timeval)) \
-	       + CMSG_SPACE(sizeof(u_char)))]; // add space for rcvtos
-    struct cmsghdr *cmsg;
-#if HAVE_DECL_MSG_CTRUNC
-    bool ctrunc_warn_enable;
-#endif
-#endif
 #if HAVE_DECL_SO_MAX_PACING_RATE
     Timestamp PacingStepTime;
 #endif

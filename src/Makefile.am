@@ -51,7 +51,6 @@ iperf_SOURCES = \
 		dscp.c \
 		iperf_formattime.c \
 		iperf_multicast_api.c \
-		udp_acks.cpp \
 		prague_cc.cpp
 
 iperf_LDADD = $(LIBCOMPAT_LDADDS)
